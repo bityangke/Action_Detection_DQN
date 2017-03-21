@@ -150,3 +150,87 @@ function func_take_action(old_mask, action, total_frms,alpha)
 	end
 	return new_mask
 end
+
+-- temporary for validate
+function func_take_action_forward(old_mask, action, total_frms,alpha)
+	
+	local new_mask = {}
+	local len = 0	
+	local offset = 0
+	
+	if action == 1 then -- move forward
+		len = old_mask[2] - old_mask[1] + 1
+		offset = torch.floor(len * alpha)
+		
+		if (old_mask[1] - offset) > 0 then
+			new_mask[1] = old_mask[1] - offset
+			new_mask[2] = old_mask[2] - offset
+		else
+			new_mask[1] = 1
+			new_mask[2] = len
+		end 
+		
+	elseif action == 2 then -- move back
+		len = old_mask[2] - old_mask[1] + 1
+		offset = torch.floor(len * alpha)
+		
+		if (old_mask[2] + offset) < total_frms then
+			new_mask[1] = old_mask[1] + offset
+			new_mask[2] = old_mask[2] + offset
+		else
+			new_mask[1] = total_frms - len + 1
+			new_mask[2] = total_frms
+		end 
+		
+	elseif action == 4 then -- expand
+		len = old_mask[2] - old_mask[1] + 1
+		if len > max_mask then
+			return old_mask
+		end
+		offset = torch.floor(len * alpha / 2)
+		
+		if (old_mask[1] - offset) > 0 then
+			new_mask[1] = old_mask[1] - offset
+		else
+			new_mask[1] = 1
+		end 
+		
+		if (old_mask[2] + offset) < total_frms  then
+			new_mask[2] = old_mask[2] + offset
+		else
+			new_mask[2] = total_frms
+		end
+		
+	elseif action == 3	then -- narrow
+		len = old_mask[2] - old_mask[1] + 1
+		offset = torch.floor(len * alpha / 2)
+		
+		-- check if at least has 16 frames
+		if (len - 2*offset) >= 16 then
+			new_mask[1] = old_mask[1] + offset
+			new_mask[2] = old_mask[2] - offset
+		else
+			offset = torch.floor((len - 16) / 2)
+			new_mask[1] = old_mask[1] + offset
+			new_mask[2] = old_mask[2] - offset
+		end
+	elseif action == 5	then -- jump -> take a giant leap instead
+		len = old_mask[2] - old_mask[1] + 1
+		offset = torch.floor(len * alpha * 3)
+		
+		if (old_mask[2] + offset) < total_frms then
+			new_mask[1] = old_mask[1] + offset
+			new_mask[2] = old_mask[2] + offset
+		else
+			new_mask[1] = total_frms - len + 1
+			new_mask[2] = total_frms
+		end  
+	else
+		error('Wrong action')
+	end 
+	if (new_mask[2] - new_mask[1]+1) < 16 then
+			print(new_mask[1], new_mask[2])
+			error('inadequate frames action' .. action)
+	end
+	return new_mask
+end

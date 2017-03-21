@@ -70,20 +70,6 @@ function func_read_validate_cmd(cmd, arg)
 	return opt
 end
 
-function func_read_visualize_cmd(cmd,arg)
-	cmd:text()
-	cmd:text('Validate Agent:')
-	cmd:text()
-	cmd:text('Options:')
-	
-	cmd:option('-data_path', '', 'data to visualize')
-	
-	cmd:text()
-	
-	local opt = cmd:parse(arg)
-	
-	return opt
-end
 
 function func_set_gpu(opt, file)
 	if opt >= 0 then
