@@ -34,7 +34,7 @@ if opt.gpu >=0 then crirerion = criterion:cuda() end
 
 -- training with optim
 -- optim paras for optim
-local optimState = {learningRate = opt.lr, maxIteration = 1}
+local optimState = {learningRate = opt.lr, maxIteration = 1, learningRateDecay = 0.02, evalCounter = 0}
 local logger = optim.Logger('./finetune_model/log_err')
 logger:setNames{'Training_error', 'epoch'}
 
@@ -154,6 +154,7 @@ do
 							logger:add{loss*100, i}
 							return loss, gradParams
 						end
+						optimState.evalCounter = optimState.evalCounter+1
 						optim.sgd(feval, params, optimState)
 		end
 	local mdl_name={}
@@ -162,7 +163,9 @@ do
 	else
 		mdl_name = './finetune_model/c_'.. opt.class .. '_'.. i
 	end
-	torch.save(mdl_name, {dqn = dqn, gpu = opt.gpu})
+	if i>0 then
+		torch.save(mdl_name, {dqn = dqn, gpu = opt.gpu})
+	end
 	logger:style{'+-'}
 	logger:plot()
 end

@@ -26,10 +26,11 @@ end
 local training_file = './' .. opt.data_path .. '/trainlist_id.t7'
 print(training_file)
 local clip_table = torch.load(training_file)
-local training_clip_table = clip_table[opt.class]
+local training_clip_table= clip_table[opt.class]
 if training_clip_table == nil then
 	error('no trainlist file')
 end
+
 
 --set training parameters
 local max_epochs = opt.epochs
@@ -251,7 +252,7 @@ do
 				elseif action == jump_action then
 					-- encourage jump action if it is a iou==0 state
 					if new_iou == 0 then
-						reward = func_get_reward_movement(0, 1,0,0)/3 -- half reward
+						reward = func_get_reward_movement(0, 1,0,0) -- half reward
 					else
 						reward = func_get_reward_movement(1,0,0,0)
 					end
@@ -301,10 +302,10 @@ do
 					local tmp_mod = torch.fmod(count_train,train_period)
 					tmp_mod = tmp_mod[1]
 					if tmp_mod == 0 then
-						--local minibatch = func_sample(replay_memory, batch_size-3) -- in Hjj_Reinforcement
-						--local expert_batch = func_sample(expert_experience, 3)
-						--for l = 1,3 do table.insert(minibatch,expert_batch[l]) end
-						local minibatch = func_sample(replay_memory, batch_size) 
+						local minibatch = func_sample(replay_memory, batch_size-3) -- in Hjj_Reinforcement
+						local expert_batch = func_sample(expert_experience, 3)
+						for l = 1,3 do table.insert(minibatch,expert_batch[l]) end
+						--local minibatch = func_sample(replay_memory, batch_size) 
 						local memory = {}
 						-- construct training set
 						local training_set = {data=torch.Tensor(batch_size, input_vector_size),
