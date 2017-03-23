@@ -106,6 +106,11 @@ do
 			--local mask = func_mask_random_init(total_frms, masked_segs)
 			-- continue from the end of last mask
 			local mask = {last_f, last_f+64}
+			if last_f - 16 > 0 then 
+				mask[1] = mask[1] - 16
+				mask[2] = mask[2] - 16
+			 end
+			
 			if mask[2] >= total_frms then 
 				mask[2] = total_frms
 				knocked = knocked + 1
