@@ -30,19 +30,6 @@ function func_modify_gt(gt_table, max_length)
 					if q[1] == 0 then q[1] = 1 end
 					table.insert(tmp_gt, q)
 				else
-				--[[
-					local count = torch.floor((q[2]-q[1]+1)/max_length)
-					for k=1,count
-					do
-						local tmp = {q[1]+max_length*(k-1), q[1]+max_length*k, q[3]}
-						--print(tmp)
-						table.insert(tmp_gt, tmp)
-					end
-					if (q[2]-q[1]+1) - max_length*count > 16 then
-						local tmp = {q[1]+max_length*count , q[2], q[3]}
-						table.insert(tmp_gt, tmp)
-					end
-					]]--
 					if q[1] == 0 then q[1] = 1 end
 					local beg = q[1]
 					local ed = beg+max_length-1

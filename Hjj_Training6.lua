@@ -8,7 +8,7 @@
 -- do not stop when trigger
 require 'Hjj_Read_Input_Cmd'
 require 'Hjj_Reinforcement'
-require 'Zt_Interface_new'
+require 'Zt_Interface'
 require 'Hjj_Mask_and_Actions'
 require 'Hjj_Metrics'
 require 'optim'

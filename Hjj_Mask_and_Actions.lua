@@ -226,6 +226,7 @@ function func_take_action_forward(old_mask, action, total_frms,alpha)
 			new_mask[2] = total_frms
 		end  
 	else
+		print(action..'!!!!!!!!!!!!!!!!!!')
 		error('Wrong action')
 	end 
 	if (new_mask[2] - new_mask[1]+1) < 16 then

@@ -37,12 +37,17 @@ require 'math'
 function func_get_data_set_info(data_path,class_id,flag)
 
 --#######################################
-	local action_class={'High jump','Cricket','Discus throw','Javelin throw','Paintball','Long jump',
-	                     'Bungee jumping','Triple jump','Shot put','Dodgeball','Hammer throw',
-	                     'Skateboarding','Doing motocross','Starting a campfire','Archery',
-	                     'Playing kickball','Pole vault','Baton twirling','Camel ride','Croquet',
-	                     'Curling','Doing a powerbomb','Hurling','Longboarding','Powerbocking','Rollerblading'}
+	--local action_class={'High jump','Cricket','Discus throw','Javelin throw','Paintball','Long jump',
+	--                     'Bungee jumping','Triple jump','Shot put','Dodgeball','Hammer throw',
+	--                     'Skateboarding','Doing motocross','Starting a campfire','Archery',
+	--                     'Playing kickball','Pole vault','Baton twirling','Camel ride','Croquet',
+	--                     'Curling','Doing a powerbomb','Hurling','Longboarding','Powerbocking','Rollerblading'}
 	--action_class[1] = 'High jump'
+	local action_class = {'High jump','Javelin throw','BasketballDunk','Billiards',
+					'CricketShot','GolfSwing','Ambiguous','BaseballPitch','CleanAndJerk',
+					'CliffDiving','CliffDiving','CricketBowling','Diving','FrisbeeCatch',
+					'HammerThrow','LongJump','PoleVault','Shotput','SoccerPenalty',
+					'TennisSwing','ThrowDiscus','VolleyballSpiking'}
 --########################################
     local gt_table={}
     local clip_table={}
@@ -107,11 +112,17 @@ end
 function func_get_C3D(data_path,class_id,flag,clip_ind,beg_ind,end_ind, c3d_m,cover_id)
 
 --#######################################
-	local action_class={'High jump','Cricket','Discus throw','Javelin throw','Paintball','Long jump',
+	--[[local action_class={'High jump','Cricket','Discus throw','Javelin throw','Paintball','Long jump',
 	                     'Bungee jumping','Triple jump','Shot put','Dodgeball','Hammer throw',
 	                     'Skateboarding','Doing motocross','Starting a campfire','Archery',
 	                     'Playing kickball','Pole vault','Baton twirling','Camel ride','Croquet',
-	                     'Curling','Doing a powerbomb','Hurling','Longboarding','Powerbocking','Rollerblading'}
+	                     'Curling','Doing a powerbomb','Hurling','Longboarding','Powerbocking','Rollerblading'}]]
+
+	local action_class = {'High jump','Javelin throw','BasketballDunk','Billiards',
+					'CricketShot','GolfSwing','Ambiguous','BaseballPitch','CleanAndJerk',
+					'CliffDiving','CliffDiving','CricketBowling','Diving','FrisbeeCatch',
+					'HammerThrow','LongJump','PoleVault','Shotput','SoccerPenalty',
+					'TennisSwing','ThrowDiscus','VolleyballSpiking'}
 --########################################
 
 	-- loads
@@ -185,7 +196,7 @@ function func_get_C3D(data_path,class_id,flag,clip_ind,beg_ind,end_ind, c3d_m,co
 			  im = image.load(path..tostring(beg_ind+(t-1)*step)..'.jpg')                 -- read image
 			  im = image.scale(im, Width, Height)  -- resize image
 			  im = im * 255                                 -- change range to 0 and 255
-			  im = im:index(1,torch.LongTensor{3,2,1})      -- change RBB --> BGR
+			  im = im:index(1,torch.LongTensor{3,2,1})      -- change RGB --> BGR
 		  -- subtract mean
 			  for i=1,3 do
 				im[{ i, {}, {} }]:add(-mean_image[i])       --normalization

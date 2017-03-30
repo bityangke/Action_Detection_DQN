@@ -3,7 +3,7 @@
 
 require 'Hjj_Read_Input_Cmd'
 require 'Hjj_Reinforcement'
-require 'Zt_Interface_new'
+require 'Zt_Interface'
 require 'Hjj_Mask_and_Actions'
 require 'Hjj_Metrics'
 
@@ -17,13 +17,13 @@ if not log_file then
 	error("open log file error")
 end
 
-local track_file = io.open('./data_output/tracka.txt', 'w')
+local track_file = io.open('./data_output/trackb.txt', 'w')
 if not track_file then
 	print("open track file error")
 	error("open track file error")
 end
 
-local gt_file = io.open('./data_output/gta.txt', 'w')
+local gt_file = io.open('./data_output/gtb.txt', 'w')
 if not gt_file then
 	print("open gt file error")
 	error("open gt file error")
@@ -49,7 +49,7 @@ end
 
 -- action parameters
 local max_steps = opt.max_steps
-local trigger_thd = 0.5 -- threshold for terminal
+local trigger_thd = 0.65 -- threshold for terminal
 local trigger_action = number_of_actions
 local act_alpha = opt.alpha
 local max_trigger = 11
