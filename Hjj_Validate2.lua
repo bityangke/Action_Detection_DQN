@@ -1,9 +1,9 @@
--- slide the window to detect
+-- split to detect
 -- combine the test result to calculate mAP 
 
 require 'Hjj_Read_Input_Cmd'
 require 'Hjj_Reinforcement'
-require 'Zt_Interface'
+require 'Zt_Interface_new'
 require 'Hjj_Mask_and_Actions'
 require 'Hjj_Metrics'
 
@@ -17,26 +17,34 @@ if not log_file then
 	error("open log file error")
 end
 
-local track_file = io.open('./data_output/track.txt', 'w')
+local track_file = io.open('./data_output/tracka.txt', 'w')
 if not track_file then
 	print("open track file error")
 	error("open track file error")
 end
 
-local gt_file = io.open('./data_output/gt.txt', 'w')
+local gt_file = io.open('./data_output/gta.txt', 'w')
 if not gt_file then
 	print("open gt file error")
 	error("open gt file error")
 end
 
 -- read validate clips from files
-local validate_file = './' .. opt.data_path .. '/validationlist_id.t7'
+--local validate_file = './' .. opt.data_path .. '/validationlist_id.t7'
 --local validate_file = './' .. opt.data_path .. '/trainlist_id.t7'
+local validate_file = './' .. opt.data_path .. '/new_validatelist_thumos.t7'
 print(validate_file)
 local clip_table = torch.load(validate_file)
-local validate_clip_table = clip_table[opt.class]
-if validate_clip_table == nil then
-	print('no validatelist file')
+local tt = clip_table[opt.class]
+if tt == nil then
+	error('no trainlist file')
+end
+
+-- thomas
+local validate_clip_table={}
+--validate_clip_table = tt
+for i=1,10 do
+	table.insert(validate_clip_table, tt[#tt-10+i])
 end
 
 -- action parameters
@@ -126,10 +134,10 @@ do
 				iou, index = func_find_max_iou(mask, tmp_gt)
 			
 				track_file:write(i .. '\t' .. lp .. '\t' .. steps .. '\t' ..
-								 iou .. '\t' .. mask[1] .. '\t' .. mask[2] .. '\n')
+								 iou .. '\t' .. mask[1] .. '\t' .. mask[2] .. '\t' .. action .. '\n')
 			
 				print('\t\tstep ' .. steps .. '\t; beg = ' .. mask[1] .. '\t ;end = ' .. mask[2] 
-								.. ' ; iou ' .. iou .. '\n')
+								.. ' ; iou ' .. iou .. '\t' .. action .. '\n')
 												
 				local C3D_vector = func_get_C3D(opt.data_path, opt.class, 1,
 												 v, mask[1], mask[2], C3D_m, {})
@@ -139,20 +147,34 @@ do
 			
 				local action_output = dqn:forward(input_vector)
 				local tmp_v = 0
+				
 				tmp_v, action = torch.max(action_output,1)
 				action = action[1]-- from tensor to numeric type
-				history_vector = func_update_history_vector(history_vector, action)
+				-- give a very small number for getting the second max action
+				action_output[action] = -111111111 
 				
 				print('\t\t\tAction = ' .. action .. '\n')
 				
+				
+				if action == 3 and mask[2]-mask[1] <= 16 then
+					tmp_v, action = torch.max(action_output,1)
+					action = action[1]-- from tensor to numeric type
+				elseif action == 4 and mask[2]-mask[1]+1 >= 2*max_gt_length then
+					tmp_v, action = torch.max(action_output,1)
+					action = action[1]-- from tensor to numeric type
+				end
 				if action == trigger_action then
 					print('############### BOOM! #############'.. mask[1] .. 
 						' - ' .. mask[2] .. ' ; ' .. total_frms .. '\n')
+					track_file:write(i .. '\t' .. lp .. '\t' .. steps .. '\t' ..
+								 iou .. '\t' .. mask[1] .. '\t' .. mask[2] .. '\t' .. action .. '\n')
 					bingo = true
 					trigger_count = trigger_count + 1
 					-- not to mask all the area
-					last_f = mask[2]
-					left_frm = total_frms - last_f
+					if last_f < mask[2] then
+						last_f = mask[2]
+						left_frm = total_frms - last_f
+					end
 					if mask[2] == total_frms then
 						knocked = knocked + 1
 					end
@@ -161,12 +183,18 @@ do
 					table.insert(masked_segs, mask)
 				else
 					mask = func_take_action_forward(mask, action, total_frms, act_alpha)
-					last_f = mask[2]
-					left_frm = total_frms - last_f
+					if last_f < mask[2] then
+						last_f = mask[2]
+						left_frm = total_frms - last_f
+					elseif last_f - mask[2] >= 64 then
+						bingo = true
+						print('~~~~~~go back too much!!!!')
+					end
 					if mask[2] == total_frms then
 						knocked = knocked + 1
 					end
 				end
+				history_vector = func_update_history_vector(history_vector, action)
 				steps = steps + 1
 			end	--while
 			lp = lp+1

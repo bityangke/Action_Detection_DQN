@@ -1,10 +1,14 @@
 -- do not mask when extract C3D
 -- do not split ground truth
 -- no dist 
-
+-- jump
+-- no expert
+-- for thomas
+-- no narrow when 16
+-- do not stop when trigger
 require 'Hjj_Read_Input_Cmd'
 require 'Hjj_Reinforcement'
-require 'Zt_Interface'
+require 'Zt_Interface_new'
 require 'Hjj_Mask_and_Actions'
 require 'Hjj_Metrics'
 require 'optim'
@@ -24,9 +28,15 @@ end
 local training_file = './' .. opt.data_path .. '/trainlist_id.t7'
 print(training_file)
 local clip_table = torch.load(training_file)
-local training_clip_table = clip_table[opt.class]
-if training_clip_table == nil then
+local tt = clip_table[opt.class]
+if tt == nil then
 	error('no trainlist file')
+end
+
+-- thomas
+local training_clip_table={}
+for i=1,10 do
+	table.insert(training_clip_table, tt[#tt-10+i])
 end
 
 --set training parameters
@@ -39,8 +49,7 @@ local experience_replay_buffer_size = opt.replay_buffer
 local gamma = 0.90 --discount factor
 local epsilon = 1 -- greedy policy
 local trigger_thd = 0.5 -- threshold for terminal
-local trigger_len = 80
-local trigger_thd2 = 0.8
+
 local count_train = torch.Tensor(1):fill(0)
 local train_period = torch.floor(opt.batch_size/100)
 
@@ -58,6 +67,7 @@ local act_alpha = opt.alpha
 
 --init replay memory
 local replay_memory = {}
+
 --init reward
 local reward = 0
 --if opt.model_name is '0', then init DQN model
@@ -76,19 +86,20 @@ if opt.gpu >=0 then crirerion = criterion:cuda() end
 
 -- training with optim
 -- optim paras for optim
-local optimState = {learningRate = opt.lr, maxIteration = 1}
+local optimState = {learningRate = opt.lr, maxIteration = 1, learningRateDecay = 0.00005, evalCounter = 0}
+--local optimState = {learningRate = opt.lr, maxIteration = 1}
 local logger = optim.Logger(opt.log_err)
 logger:setNames{'Training_error', 'epoch'}
 
 
 --read dataset
 local gt_table = func_get_data_set_info(opt.data_path, opt.class, 1)
+--print(gt_table)
 local max_gt_length = 128 -- max length to split gt
 --gt_table = func_modify_gt(gt_table, max_gt_length)
 
 -- load C3D model
 local C3D_m = torch.load('c3d.t7');
-
 for i = 1, max_epochs
 do
 	log_file:write('It is the ' .. i .. ' epoch\n')
@@ -97,7 +108,6 @@ do
 	for j, v in pairs(training_clip_table)
 	do
 		
-		-- activate a trigger action, different from the following bingo
 		local masked = false 
 		local masked_segs={}
 		local not_finished = true
@@ -112,11 +122,7 @@ do
 		print('\tIt is the '.. j .. ' clip, clip_id = ' .. 
 						v .. ' total_frms = '.. total_frms)
 		
-		-- loop gt_num times to find all objects
-		-- start from initial state for each loop
-		-- do at most max_steps in a single loop
-		-- ?? how to make sure each object will be found
-		for k = 1, gt_num*3
+		for k = 1, 40
 		do
 			log_file:write('\t\tIt is the ' .. k .. ' gt, from '.. '\n')
 			--				tmp_gt[k][1] ..' to '.. tmp_gt[k][2] .. '\n')
@@ -161,7 +167,7 @@ do
 			--old_dist, new_dist, dist_table,old_iou, new_iou, iou_table, index  = 
 			--			func_follow_dist_iou(cur_mask, tmp_gt, available_objects,iou_table,dist_table)
 			
-			--new_iou = old_iou --???
+
 			local now_target_gt = tmp_gt[index]
 			
 			-- init history action buffer
@@ -193,44 +199,44 @@ do
 				
 				local action_output = dqn:forward(input_vector)
 				print(action_output)
+				local tmp_flag = 0
+				local trigger_memory = {}
 				
 				-- It is checking for last non-trigger action, which may actually lead to an 
 				-- terminal state; we force it to be terminal action in case actual IoU 
 				-- is higher than 0.5, to train faster the agent; 
-				if i < max_epochs and new_iou > trigger_thd then
-					action = trigger_action
-				elseif overlap > trigger_thd2 and (cur_mask[2]-cur_mask[1]+1) > trigger_len and i < max_epochs then
-					action = trigger_action
+				local tmp_v = 0
+				tmp_v, action = torch.max(action_output,1)
+				action = action[1]-- from tensor to numeric type
+				
+				if (cur_mask[2]-cur_mask[1]+1) >= max_gt_length*2 and action == 4 then
+					-- forbid expand than max_gt_length
+					-- choose a random action
+					action = torch.random(torch.Generator(),1,3)
+				elseif (cur_mask[2]-cur_mask[1]) <= 16 and action == 3 then
+					action = torch.random(torch.Generator(),1,3)
+					if action == 3 then action = 4 end
+				end
+				if action == trigger_action then 
+					tmp_flag = 1 
+				elseif i < max_epochs and new_iou > trigger_thd then
+					--action = trigger_action
+					tmp_flag = 2
 				elseif i < max_epochs and new_iou == 0 then
 					action = jump_action
 				elseif torch.uniform(torch.Generator()) < epsilon then -- greedy policy
 					action = torch.random(torch.Generator(),1,number_of_actions)
-				else
-					local tmp_v = 0
-					tmp_v, action = torch.max(action_output,1)
-					action = action[1]-- from tensor to numeric type
-					if (cur_mask[2]-cur_mask[1]+1) >= max_gt_length and action == 4 then
-						-- forbid expand than max_gt_length
-						-- choose a random action
-						action = torch.random(torch.Generator(),1,3)
-					end
 				end
 				
 				if action == trigger_action then -- estemated as trigger
 					old_iou, new_iou, iou_table, index = func_follow_iou(cur_mask,
 												tmp_gt, available_objects, iou_table)
 					overlap = func_calculate_overlapping(tmp_gt[index], cur_mask)
-					--old_dist, new_dist, dist_table,old_iou, new_iou, iou_table, index  = 
-					--	func_follow_dist_iou(cur_mask, tmp_gt, available_objects,iou_table,dist_table)
-					
+
 					now_target_gt = tmp_gt[index]
-					if overlap > trigger_thd2 and (cur_mask[2]-cur_mask[1]+1) > trigger_len then
-						-- if satisfy overlapping condition, give positive reward
-						reward = func_get_reward_trigger(1)
-					else
-						-- give reward according to iou
-						reward = func_get_reward_trigger(new_iou)
-					end
+
+					reward = func_get_reward_trigger(new_iou)
+
 					step_count = step_count+1
 					bingo = true
 					
@@ -238,16 +244,46 @@ do
 							' ; Mask= [' .. cur_mask[1] .. ' , ' .. cur_mask[2] .. 
 							' ]; GT = [' .. now_target_gt[1] .. ' , ' .. now_target_gt[2] .. 
 							 ' ]; Reward= ' .. reward .. ' ; iou = ' .. new_iou .. '; overlap = '
-							 .. overlap .. '\n')
+							 .. overlap .. '; self = '.. tmp_flag .. '\n')
 					print('\t\t\tStep: ' .. step_count .. ' ---> Action= ' .. action ..
 							' ; Mask= [' .. cur_mask[1] .. ' , ' .. cur_mask[2] .. 
 							' ]; GT = [' .. now_target_gt[1] .. ' , ' .. now_target_gt[2] .. 
 							 ' ]; Reward= ' .. reward .. ' ; iou = ' .. new_iou .. '; overlap = '
-							  .. overlap .. '\n')
-				elseif action == jump_action then
+							  .. overlap .. '; self = '.. tmp_flag ..'\n')
+				
+					--****************************
+					step_count = max_steps -- to jump out of the loop
+					--****************************
+				elseif tmp_flag == 2 then
+					-- forced trigger
+					old_iou, new_iou, iou_table, index = func_follow_iou(cur_mask,
+												tmp_gt, available_objects, iou_table)
+					overlap = func_calculate_overlapping(tmp_gt[index], cur_mask)
+
+					now_target_gt = tmp_gt[index]
+
+					reward = func_get_reward_trigger(new_iou)
+
+					step_count = step_count+1
+					
+					log_file:write('\t\t\tStep: ' .. step_count .. ' ---> Action= ' .. number_of_actions ..
+							' ; Mask= [' .. cur_mask[1] .. ' , ' .. cur_mask[2] .. 
+							' ]; GT = [' .. now_target_gt[1] .. ' , ' .. now_target_gt[2] .. 
+							 ' ]; Reward= ' .. reward .. ' ; iou = ' .. new_iou .. '; overlap = '
+							 .. overlap .. '; self = '.. tmp_flag .. '\n')
+					print('\t\t\tStep: ' .. step_count .. ' ---> Action= ' .. number_of_actions ..
+							' ; Mask= [' .. cur_mask[1] .. ' , ' .. cur_mask[2] .. 
+							' ]; GT = [' .. now_target_gt[1] .. ' , ' .. now_target_gt[2] .. 
+							 ' ]; Reward= ' .. reward .. ' ; iou = ' .. new_iou .. '; overlap = '
+							  .. overlap .. '; self = '.. tmp_flag ..'\n')
+							  
+					-- add to memory					
+					trigger_memory[1]  = {input_vector, number_of_actions, reward, input_vector}
+				end
+				if action == jump_action then
 					-- encourage jump action if it is a iou==0 state
 					if new_iou == 0 then
-						reward = func_get_reward_movement(0, 1,0,0)
+						reward = func_get_reward_movement(0, 1,0,0) -- half reward
 					else
 						reward = func_get_reward_movement(1,0,0,0)
 					end
@@ -262,7 +298,7 @@ do
 					--old_dist = new_dist
 					history_vector = func_update_history_vector(history_vector, action)
 					step_count = step_count + 1
-				else -- take action
+				elseif action ~= trigger_action then -- take action
 				-- 1 move forward; 2 move back; 4 expand; 3 narrow
 					cur_mask = func_take_action(cur_mask, action, total_frms, act_alpha)
 					--old_dist, new_dist, dist_table,old_iou, new_iou, iou_table, index  = 
@@ -288,15 +324,27 @@ do
 				local tmp_experience  = {input_vector, action, reward, new_input_vector}
 				if table.getn(replay_memory) < experience_replay_buffer_size then
 					table.insert(replay_memory, tmp_experience)
+					if #trigger_memory > 0 then
+						if #trigger_memory == 1 then
+							table.insert(replay_memory, trigger_memory[1])
+						else
+							error('wrong trigger memory')
+						end
+					end
 					input_vector = new_input_vector
 				else
 					-- replay_memory is a stack
 					table.remove(replay_memory, 1)
 					table.insert(replay_memory, tmp_experience)
+					if #trigger_memory > 0 then
+						table.remove(replay_memory, 1)
+						table.insert(replay_memory, trigger_memory[1])
+					end
 					
 					local tmp_mod = torch.fmod(count_train,train_period)
 					tmp_mod = tmp_mod[1]
 					if tmp_mod == 0 then
+
 						local minibatch = func_sample(replay_memory, batch_size) -- in Hjj_Reinforcement
 						local memory = {}
 						-- construct training set
@@ -350,8 +398,8 @@ do
 							logger:add{loss*100, i}
 							return loss, gradParams
 						end
+						optimState.evalCounter = optimState.evalCounter + 1
 						optim.sgd(feval, params, optimState)
-						
 					end -- mod
 					input_vector = new_input_vector
 				end -- if memory replay
@@ -362,7 +410,6 @@ do
 					if reward == 3 then
 						table.insert(masked_segs, {cur_mask[1]+torch.floor((cur_mask[2]-cur_mask[1]+1)*0.1),
 									cur_mask[2]-torch.floor((cur_mask[2]-cur_mask[1]+1)*0.1)})
-						--available_objects[index] = 0
 					end
 				else
 					masked = false
@@ -370,7 +417,9 @@ do
 			end -- while (not bingo) and (step_count < max_steps) and not_finished
 			-- available_objects[index] = 0
 		end -- gts loop
-
+		-- visualize training error
+		logger:style{'+-'}
+		logger:plot()
 	end -- clips loop
 	if epsilon > 0.1 then
 		epsilon = epsilon - 0.1
@@ -379,15 +428,13 @@ do
 	if table.getn(replay_memory) >= experience_replay_buffer_size and i > 4 then
 		local mdl_name={}
 		if opt.gpu >= 0 then
-			mdl_name = './model/g_'.. opt.class .. '_'.. i
+			mdl_name = './model/g_'.. opt.name .. opt.class .. '_'.. i
 		else 
-			mdl_name = './model/c_'.. opt.class .. '_'.. i
+			mdl_name = './model/c_'.. opt.name .. opt.class .. '_'.. i
 		end
 		torch.save(mdl_name, {dqn = dqn, gpu = opt.gpu})
 	end
-	-- visualize training error
-	logger:style{'+-'}
-	logger:plot()
+
 end -- epochs loop
 
 log_file:close()
